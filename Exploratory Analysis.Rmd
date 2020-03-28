@@ -47,6 +47,32 @@ train_terminating_motions <-
   read_csv("train_terminating_motions.csv",
   col_types = cols(mudac_id = col_character()))
 
+
+train_dockets <- read_csv("train_dockets.csv",
+  col_types = cols(mudac_id = col_character()))
+```
+
+```{R}
+head(train_other_motions)
+head(train_dockets)
+head(train_terminating_motions)
+
+train_other_merge <- full_join(train_other_motions,train_dockets,by="mudac_id")
+
+#district
+summary(glm(train_other_merge$summary_judgment~district,family = binomial,data=train_other_merge))
+
+summary(glm(train_other_merge$settled~district,family = binomial,data = train_other_merge))
+
+#motions:
+summary(glm(train_other_merge$settled~train_other_merge$motion_type*decison,family = binomial,data=train_other_merge))
+
+
+#
+summary(glm(train_other_merge$settled~train_other_merge$motion_type+train_other_merge$filing_party+train_other_merge$decison+train_other_merge$decided_before_joined+train_other_merge$proceeding_precentile
+summary(glm(train_other_merge$settled~train_other_merge$circuit+train_other_merge$district
+summary(glm(train_other_merge~train_other_merge$nos_code+train_other_merge$statute+train_other_merge$protected_class))
+=======
 district_fips_code <- read_csv(
   "district_fips_code.csv",
   col_types = cols(district_number = col_character(),
@@ -124,17 +150,5 @@ summary(glm(summary_judgment ~ days_opened, data = train_dockets, family = binom
 summary(glm(settled ~ days_opened, data = train_dockets, family = binomial()))
 ##The data may be unbalanced due to the fact that length of trial has a significant effect on outcome, and cases that will last longer that started recently will not have finished yet.  
 
+
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
