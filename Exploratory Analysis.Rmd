@@ -1,0 +1,48 @@
+---
+title: "Exploratory Analysis"
+author: "Erik Guterman"
+date: "3/28/2020"
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+library(readr)
+```
+
+
+Consider separate models for Motion for Summary Judgement and Motion to Dismiss
+
+Reading in the data. All columns not specified use ReadR's default. 
+
+Many values specified as characters will be later converted to factors, if needed. (Additionally, the MUDAC_ID column is left as a CHAR across all datasets for simpler joining.)
+
+
+```{r}
+train_dockets <- read_csv(
+  "train_dockets.csv",
+  col_types = cols(
+  circuit = col_character(),
+  district = col_character(),
+  diversity_residence = col_character(),
+  filers_county = col_character(),
+  jurisdiction = col_character(),
+  mudac_id = col_character(),
+  nos_code = col_character(),
+  office = col_character(),
+  origin_at_filing = col_character(),
+  pro_se = col_character(),
+  settled = col_logical(),
+  summary_judgment = col_logical()
+  )
+  )
+
+train_other_motions <-
+  read_csv("train_other_motions.csv",
+  col_types = cols(mudac_id = col_character()))
+  
+train_terminating_motions <-
+  read_csv("train_terminating_motions.csv",
+  col_types = cols(mudac_id = col_character()))
+  
+```
