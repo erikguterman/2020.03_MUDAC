@@ -9,6 +9,7 @@ output: pdf_document
 library(tidyverse)
 library(readr)
 library(car)
+library(lmtest)
 ```
 
 
@@ -77,6 +78,11 @@ train_dockets <- left_join(train_dockets, districts, by = c("district" = "distri
 ##There are very few cases with any pro se clients, and therefore all will be combined into one in order to improve the availability
 train_dockets <- train_dockets %>% 
   mutate(pro_se = ifelse(pro_se == 0, 0, 1))
+
+train_other_motions$terminating <- FALSE
+train_terminating_motions$terminating <- TRUE
+
+train_all_motions <- bind_rows(train_other_motions, train_terminating_motions)
 ```
 
 ##Exploratory Analysis
@@ -128,11 +134,22 @@ summary(glm(settled ~ days_opened, data = train_dockets, family = binomial()))
 
 ```{r}
 train_dockets <-
-  train_terminating_motions %>%
+  train_all_motions %>%
   group_by(mudac_id) %>%
   summarise(nmotionsfiled = n()) %>%
   right_join(train_dockets, by =  "mudac_id") %>%
   mutate(nmotionsfiled = replace_na(nmotionsfiled, 0))
+
+cor(train_dockets$days_opened, train_dockets$nmotionsfiled)
+
+##How to determine which is the better indicator
+
+summary(glm(settled ~ days_opened, data = train_dockets, family = binomial()))
+summary(glm(settled ~ nmotionsfiled, data = train_dockets, family = binomial()))
+
+summary(glm(settled ~ nmotionsfiled + days_opened, data = train_dockets, family = binomial()))
+summary(glm(settled ~ nmotionsfiled + days_opened, data = train_dockets, family = binomial()))
+
 ```
 
 
