@@ -11,6 +11,8 @@ library(readr)
 library(foreign)
 library(nnet)
 library(ggplot2)
+library(car)
+library(lmtest)
 ```
 
 
@@ -76,8 +78,21 @@ summary(glm(summary_judgment~motion_type+ filing_party+filed_before_joined+decis
 
 ```
 
+
 ```{R}
 summary(glm(summary_judgment~motion_type+ filing_party+filed_before_joined+decison+decided_before_joined+proceeding_precentile+circuit+district+office+nos_code+protected_class+requested_damages_amt+jury_demand+jurisdiction+diversity_residence+participants+plaintiffs+defendants+attorneys_listed+judges_assigned+informa_pauperis+class_action+arbitration_at_filing+origin_at_filing+filers_county+issue_joined+pretrial_conf+total_entry_count+before_ij_entry_count+after_ij_entry_count+year_filed+days_opened,family = binomial,data=train_other_merge))
+=======
+#Cleaning and transforming data
+
+```{r}
+##There are very few cases with any pro se clients, and therefore all will be combined into one in order to improve the availability
+train_dockets <- train_dockets %>% 
+  mutate(pro_se = ifelse(pro_se == 0, 0, 1))
+
+train_other_motions$terminating <- FALSE
+train_terminating_motions$terminating <- TRUE
+
+train_all_motions <- bind_rows(train_other_motions, train_terminating_motions)
 ```
 
 
@@ -131,4 +146,21 @@ summary(glm(summary_judgment~ motion_type+ filing_party+filed_before_joined+proc
 
 
 
+```{r}
+train_dockets <-
+  train_all_motions %>%
+  group_by(mudac_id) %>%
+  summarise(nmotionsfiled = n()) %>%
+  right_join(train_dockets, by =  "mudac_id") %>%
+  mutate(nmotionsfiled = replace_na(nmotionsfiled, 0))
+
+cor(train_dockets$days_opened, train_dockets$nmotionsfiled)
+
+##How to determine which is the better indicator
+
+summary(glm(settled ~ days_opened, data = train_dockets, family = binomial()))
+summary(glm(settled ~ nmotionsfiled, data = train_dockets, family = binomial()))
+
+summary(glm(settled ~ nmotionsfiled + days_opened, data = train_dockets, family = binomial()))
+summary(glm(settled ~ nmotionsfiled + days_opened, data = train_dockets, family = binomial()))
 
