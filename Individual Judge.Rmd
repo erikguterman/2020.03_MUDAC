@@ -1,0 +1,85 @@
+---
+title: "Individual Judge"
+author: "Erik Guterman"
+date: "3/28/2020"
+output: html_document
+---
+
+```{r}
+rateAcceptDenyMotionByCourt <- train_other_motions %>% filter(!is.na(decison)) %>%
+  left_join(select(train_dockets, c("mudac_id", "district", "office")), by = "mudac_id") %>%
+  filter(filing_party != "Unknown" & filing_party != "Other") %>%
+  group_by(district, filing_party) %>%
+  summarise(
+  Count = n(),
+  rateGrant = mean(str_detect(decison, "Grant")),
+  rateDeny = mean(str_detect(decison, "Denied")),
+  rateOther = 1 - (rateGrant + rateDeny)
+  )
+
+outcomeByVenue <- train_dockets %>% group_by(venue) %>%
+  summarise(
+  NCases = n(),
+  rateSettle = mean(outcome == "Settled"),
+  rateSummJudg = mean(outcome == "Summary Judgment"), 
+  rateOther = mean(outcome != "Summary Judgment" & outcome != "Settled")
+  )
+
+train_dockets <- train_dockets %>% left_join(outcomeByVenue, by = "venue")
+
+nMotionsGranted <- train_other_motions %>%
+  group_by(mudac_id) %>% 
+  mutate(decison = tidyr::replace_na(decison, "Other")) %>% 
+  mutate(motionsDenied = cumsum(str_detect(decison, "Denied")),
+  motionsGranted = cumsum(str_detect(decison, "Granted"))) %>% 
+  summarise(motionsDenied = max(motionsDenied), 
+            motionsGranted = max(motionsGranted))
+
+train_dockets <- train_dockets %>% left_join(nMotionsGranted, by = "mudac_id")
+```
+
+
+```{r}
+train_other_motions %>% filter(!is.na(decison)) %>% 
+  left_join(select(train_dockets, c("mudac_id", "circuit", "district", "office")), by = "mudac_id") %>% 
+  ggplot(aes(x = circuit, fill = decison)) + 
+    geom_bar(position = "fill")
+
+train_other_motions %>% filter(!is.na(decison)) %>%
+  left_join(select(train_dockets, c(
+  "mudac_id", "circuit", "district", "office"
+  )), by = "mudac_id") %>%
+    filter(filing_party == "Defendant") %>% 
+  mutate(decison = fct_collapse(
+  decison,
+  Grant = c("Granted", "Granted in Part"),
+  Deny = c("Denied", "Denied as Moot")
+  )) %>%
+  ggplot(aes(x = circuit, fill = decison)) +
+  geom_bar(position = "fill")
+
+train_other_motions %>% filter(!is.na(decison)) %>%
+  left_join(select(train_dockets, c(
+  "mudac_id", "circuit", "district", "office"
+  )), by = "mudac_id") %>%
+  filter(filing_party == "Plaintiff") %>% 
+  mutate(decison = fct_collapse(
+  decison,
+  Grant = c("Granted", "Granted in Part"),
+  Deny = c("Denied", "Denied as Moot")
+  )) %>%
+  ggplot(aes(x = circuit, fill = decison)) +
+  geom_bar(position = "fill")
+
+##Everyone is nicer to defendants, but especially the 7th circuit. 
+
+train_dockets %>% group_by(venue) %>% filter(n() > 50) %>%
+  ggplot(aes(x = venue, fill = outcome)) + 
+    geom_bar(position = "fill") + 
+  theme(legend.position = "none",
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+

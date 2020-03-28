@@ -10,18 +10,16 @@ library(tidyverse)
 library(readr)
 library(foreign)
 library(nnet)
-library(ggplot2)
+library(corrplot)
 library(car)
 library(lmtest)
 library(xgboost)
 library(mltools)
 library(data.table)
+
 ```
 
-
-Consider separate models for Motion for Summary Judgement and Motion to Dismiss
-
-Reading in the data. All columns not specified use ReadR's default. 
+##Reading in and Cleaning the Data
 
 Many values specified as characters will be later converted to factors, if needed. (Additionally, the MUDAC_ID column is left as a CHAR across all datasets for simpler joining.)
 
@@ -55,14 +53,13 @@ train_terminating_motions <-
 
 train_dockets <- read_csv("train_dockets.csv",
   col_types = cols(mudac_id = col_character()))
-```
 
-#Cleaning and transforming data
-
-```{r}
-##There are very few cases with any pro se clients, and therefore all will be combined into one in order to improve the availability
 train_dockets <- train_dockets %>% 
-  mutate(pro_se = ifelse(pro_se == 0, 0, 1))
+  ##There are very few cases with any pro se clients, and therefore all will be combined into one in order to improve the availability
+  mutate(pro_se = ifelse(pro_se == 0, 0, 1),
+         #Creating specific factor for each venue, i.e. district + office
+         venue = as.factor(paste(district,".",office, sep = ""))
+         )
 
 train_other_motions$decison <- as_factor(train_other_motions$decison)
 
@@ -83,7 +80,6 @@ train_dockets <-
   summarise(nmotionsfiled = n()) %>%
   right_join(train_dockets, by =  "mudac_id") %>%
   mutate(nmotionsfiled = replace_na(nmotionsfiled, 0))
-
 
 rateAcceptDenyMotionByCourt <- train_other_motions %>% filter(!is.na(decison)) %>%
   left_join(select(train_dockets, c("mudac_id", "district", "office")), by = "mudac_id") %>%
@@ -247,39 +243,4 @@ summary(glm(settled ~ nmotionsfiled, data = train_dockets, family = binomial()))
 
 summary(glm(settled ~ nmotionsfiled + days_opened, data = train_dockets, family = binomial()))
 summary(glm(settled ~ nmotionsfiled + days_opened, data = train_dockets, family = binomial()))
-```
-
-```{r}
-train_other_motions %>% filter(!is.na(decison)) %>% 
-  left_join(select(train_dockets, c("mudac_id", "circuit", "district", "office")), by = "mudac_id") %>% 
-  ggplot(aes(x = circuit, fill = decison)) + 
-    geom_bar(position = "fill")
-
-train_other_motions %>% filter(!is.na(decison)) %>%
-  left_join(select(train_dockets, c(
-  "mudac_id", "circuit", "district", "office"
-  )), by = "mudac_id") %>%
-    filter(filing_party == "Defendant") %>% 
-  mutate(decison = fct_collapse(
-  decison,
-  Grant = c("Granted", "Granted in Part"),
-  Deny = c("Denied", "Denied as Moot")
-  )) %>%
-  ggplot(aes(x = circuit, fill = decison)) +
-  geom_bar(position = "fill")
-
-train_other_motions %>% filter(!is.na(decison)) %>%
-  left_join(select(train_dockets, c(
-  "mudac_id", "circuit", "district", "office"
-  )), by = "mudac_id") %>%
-  filter(filing_party == "Plaintiff") %>% 
-  mutate(decison = fct_collapse(
-  decison,
-  Grant = c("Granted", "Granted in Part"),
-  Deny = c("Denied", "Denied as Moot")
-  )) %>%
-  ggplot(aes(x = circuit, fill = decison)) +
-  geom_bar(position = "fill")
-
-##Everyone is nicer to defendants, but especially the 7th circuit. 
 ```
