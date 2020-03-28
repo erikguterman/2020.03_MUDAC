@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .Rproj.user
 .Rhistory
 .RData
@@ -6,3 +7,6 @@ testfile.R
 Exploratory Analysis.Rmd
 .DS_Store
 2020.03_MUDAC.Rproj
+=======
+
+>>>>>>> 35086fdcf39b7557188d8c5ea9eec194b9ec0d7f

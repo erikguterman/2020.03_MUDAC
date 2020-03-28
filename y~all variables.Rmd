@@ -1,30 +1,16 @@
 ---
-title: "Exploratory Analysis"
-author: "Erik Guterman"
+title: "y~all variable except outcome"
+author: "Xinyun Li"
 date: "3/28/2020"
-output: pdf_document
+output: html_document
 ---
-
 ```{r}
 library(tidyverse)
 library(readr)
 library(foreign)
 library(nnet)
 library(ggplot2)
-library(car)
-library(lmtest)
-library(xgboost)
-library(mltools)
-library(data.table)
 ```
-
-
-Consider separate models for Motion for Summary Judgement and Motion to Dismiss
-
-Reading in the data. All columns not specified use ReadR's default. 
-
-Many values specified as characters will be later converted to factors, if needed. (Additionally, the MUDAC_ID column is left as a CHAR across all datasets for simpler joining.)
-
 
 ```{r}
 train_dockets <- read_csv(
@@ -48,7 +34,7 @@ train_dockets <- read_csv(
 train_other_motions <-
   read_csv("train_other_motions.csv",
   col_types = cols(mudac_id = col_character()))
-
+  
 train_terminating_motions <-
   read_csv("train_terminating_motions.csv",
   col_types = cols(mudac_id = col_character()))
@@ -62,11 +48,9 @@ train_other_merge <- full_join(train_other_motions,train_dockets,by="mudac_id")
 train_terminate_merge <- full_join(train_terminating_motions,train_dockets,by="mudac_id")
 ```
 
-
 ```{R}
 #settled
 summary(glm(settled~ motion_type+ filing_party+filed_before_joined+decison+decided_before_joined+proceeding_precentile+circuit+district+office+nos_code+statute+requested_damages_amt+jury_demand+jurisdiction+diversity_residence+participants+plaintiffs+defendants+attorneys_listed+judges_assigned+informa_pauperis+class_action+arbitration_at_filing+origin_at_filing+filers_county+issue_joined+pretrial_conf+total_entry_count+before_ij_entry_count+after_ij_entry_count+year_filed+days_opened,family = binomial,data=train_other_merge))
-
 ```
 
 ```{R}
@@ -74,42 +58,14 @@ summary(glm(settled~ motion_type+ filing_party+filed_before_joined+decison+decid
 
 ```
 
-
 ```{R}
 #summary_judgement
 summary(glm(summary_judgment~motion_type+ filing_party+filed_before_joined+decison+decided_before_joined+proceeding_precentile+circuit+district+office+nos_code+statute+requested_damages_amt+jury_demand+jurisdiction+diversity_residence+participants+plaintiffs+defendants+attorneys_listed+judges_assigned+informa_pauperis+class_action+arbitration_at_filing+origin_at_filing+filers_county+issue_joined+pretrial_conf+total_entry_count+before_ij_entry_count+after_ij_entry_count+year_filed+days_opened,family = binomial,data=train_other_merge))
 
 ```
 
-
 ```{R}
-summary(glm(summary_judgment~motion_type+ filing_party+filed_before_joined+decison+decided_before_joined+proceeding_precentile+circuit+district+office+nos_code+protected_class+requested_damages_amt+jury_demand+jurisdiction+diversity_residence+participants+plaintiffs+defendants+attorneys_listed+judges_assigned+informa_pauperis+class_action+arbitration_at_filing+origin_at_filing+filers_county+issue_joined+pretrial_conf+total_entry_count+before_ij_entry_count+after_ij_entry_count+year_filed+days_opened,family = binomial,data=train_other_merge))
-=======
-#Cleaning and transforming data
-
-```{r}
-##There are very few cases with any pro se clients, and therefore all will be combined into one in order to improve the availability
-train_dockets <- train_dockets %>% 
-  mutate(pro_se = ifelse(pro_se == 0, 0, 1))
-
-train_other_motions$decison <- as_factor(train_other_motions$decison)
-
-train_other_motions$terminating <- FALSE
-train_terminating_motions$terminating <- TRUE
-
-train_all_motions <- bind_rows(train_other_motions, train_terminating_motions)
-
-unavailableDistricts <- train_other_motions %>% 
-  left_join(select(train_dockets, c(
-  "mudac_id", "circuit", "district", "office"
-  )), by = "mudac_id") %>% filter(is.na(circuit)) %>% 
-  select("mudac_id")
-
-```
-
-
-```{R}
-#outcome
+#outcome R ABORTED
 #outcome_lm <- multinom(outcome~motion_type+ filing_party+filed_before_joined+decison+decided_before_joined+proceeding_precentile+circuit+district+office+nos_code+statute+requested_damages_amt+jury_demand+jurisdiction+diversity_residence+participants+plaintiffs+defendants+attorneys_listed+judges_assigned+informa_pauperis+class_action+arbitration_at_filing+origin_at_filing+filers_county+issue_joined+pretrial_conf+total_entry_count+before_ij_entry_count+after_ij_entry_count+year_filed+days_opened,data=train_other_merge)
 
 #z <- summary(outcome_lm)$coefficients/summary(outcome_lm)$standard.errors
@@ -152,105 +108,7 @@ head(train_terminate_merge)
 ```{R}
 summary(glm(settled~ motion_type+ filing_party+filed_before_joined+proceeding_precentile+circuit+district+office+nos_code+statute+requested_damages_amt+jury_demand+jurisdiction+diversity_residence+participants+plaintiffs+defendants+attorneys_listed+judges_assigned+informa_pauperis+class_action+arbitration_at_filing+origin_at_filing+filers_county+issue_joined+pretrial_conf+total_entry_count+before_ij_entry_count+after_ij_entry_count+year_filed+days_opened,family = binomial,data=train_terminate_merge))
 ```
+
 ```{R}
 summary(glm(summary_judgment~ motion_type+ filing_party+filed_before_joined+proceeding_precentile+circuit+district+office+nos_code+statute+requested_damages_amt+jury_demand+jurisdiction+diversity_residence+participants+plaintiffs+defendants+attorneys_listed+judges_assigned+informa_pauperis+class_action+arbitration_at_filing+origin_at_filing+filers_county+issue_joined+pretrial_conf+total_entry_count+before_ij_entry_count+after_ij_entry_count+year_filed+days_opened,family = binomial,data=train_terminate_merge))
-```
-
-
-
-```{r}
-train_dockets <-
-  train_all_motions %>%
-  group_by(mudac_id) %>%
-  summarise(nmotionsfiled = n()) %>%
-  right_join(train_dockets, by =  "mudac_id") %>%
-  mutate(nmotionsfiled = replace_na(nmotionsfiled, 0))
-
-cor(train_dockets$days_opened, train_dockets$nmotionsfiled)
-
-##How to determine which is the better indicator
-
-summary(glm(settled ~ days_opened, data = train_dockets, family = binomial()))
-summary(glm(settled ~ nmotionsfiled, data = train_dockets, family = binomial()))
-
-summary(glm(settled ~ nmotionsfiled + days_opened, data = train_dockets, family = binomial()))
-summary(glm(settled ~ nmotionsfiled + days_opened, data = train_dockets, family = binomial()))
-```
-
-```{r}
-train_other_motions %>% filter(!is.na(decison)) %>% 
-  left_join(select(train_dockets, c("mudac_id", "circuit", "district", "office")), by = "mudac_id") %>% 
-  ggplot(aes(x = circuit, fill = decison)) + 
-    geom_bar(position = "fill")
-
-rateAcceptDenyMotionByCourt <- train_other_motions %>% filter(!is.na(decison)) %>%
-  left_join(select(train_dockets, c("mudac_id", "district", "office")), by = "mudac_id") %>%
-  filter(filing_party != "Unknown" & filing_party != "Other") %>%
-  group_by(district, filing_party) %>%
-  summarise(
-  Count = n(),
-  rateGrant = mean(str_detect(decison, "Grant")),
-  rateDeny = mean(str_detect(decison, "Denied")),
-  rateOther = 1 - (rateGrant + rateDeny)
-  )
-
-train_other_motions %>% filter(!is.na(decison)) %>%
-  left_join(select(train_dockets, c(
-  "mudac_id", "circuit", "district", "office"
-  )), by = "mudac_id") %>%
-    filter(filing_party == "Defendant") %>% 
-  mutate(decison = fct_collapse(
-  decison,
-  Grant = c("Granted", "Granted in Part"),
-  Deny = c("Denied", "Denied as Moot")
-  )) %>%
-  ggplot(aes(x = circuit, fill = decison)) +
-  geom_bar(position = "fill")
-
-train_other_motions %>% filter(!is.na(decison)) %>%
-  left_join(select(train_dockets, c(
-  "mudac_id", "circuit", "district", "office"
-  )), by = "mudac_id") %>%
-  filter(filing_party == "Plaintiff") %>% 
-  mutate(decison = fct_collapse(
-  decison,
-  Grant = c("Granted", "Granted in Part"),
-  Deny = c("Denied", "Denied as Moot")
-  )) %>%
-  ggplot(aes(x = circuit, fill = decison)) +
-  geom_bar(position = "fill")
-
-##Everyone is nicer to defendants, but especially the 7th circuit. 
-
-
-
-```
-
-
-##Now, the fun XGBoost stuff
-
-```{r}
-temp <-
-  train_dockets %>% select(nmotionsfiled, district, requested_damages_amt, pro_se) %>%
-  mutate(district = as_factor(district)) %>%
-  as.data.table()
-
-temp2 <- one_hot(temp) %>% as.matrix() 
-label <- train_dockets %>% select(settled) %>% mutate(settled = ifelse(settled == TRUE, 1, 0)) %>% as.matrix()
-
-n <- 100
-data <- data.frame(x=runif(n), y=rnorm(n))
-ind <- sample(c(TRUE, FALSE), n, replace=TRUE, prob=c(0.5, 0.5))
-dataTrain <- temp2[ind, ]
-dataTest <- temp2[!ind, ]
-labelTrain <- label[ind,]
-labelTest <- label[!ind,]
-
-trainData <- xgb.DMatrix(dataTrain, label = labelTrain)
-testData <- xgb.DMatrix(dataTest, label = labelTest)
-watchlist <- list(train = trainData, eval = testData)
-bstSparse <- xgboost(data = trainData, max_depth = 6, eta = 0.3, nthread = 2, nrounds = 10, objective = "binary:logistic")
-pred <- predict(bstSparse, trainData)
-outcome <- ifelse(pred > 0.5, 1, 0)
-mean(outcome == labelTrain)
 ```
