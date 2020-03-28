@@ -1,0 +1,123 @@
+---
+title: "Notes"
+author: "Juan Malaver"
+date: "March 28, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(MASS)
+library(class)
+```
+# Exploratory Analysis 
+Importing the data:
+```{r}
+test.dockets <- read_csv("test_dockets.csv")
+test.other <- read_csv("test_other_motions.csv")
+test.termin <- read_csv("test_terminating_motions.csv")
+
+train.dockets <- read_csv("train_dockets.csv")
+train.other <- read_csv("train_other_motions.csv")
+train.termin <- read_csv("train_terminating_motions.csv")
+```
+
+Creating a single column for outcome (0 = neither, 1 = summary judgment, 2 = settlement)
+```{r}
+train.dockets <- train.dockets %>%
+  mutate(y = as.factor(ifelse(summary_judgment == 0 & settled == 0, 0, ifelse(summary_judgment == 1, 1, 2))))
+```
+
+I am using the following predictors for simple classification modelling: nos_code, district, issue_joined, days_opened, requested_damages_amt
+```{r}
+ggplot(data = train.dockets) +
+  geom_histogram(mapping = aes(x = nos_code))
+ggplot(data = train.dockets) +
+  geom_histogram(mapping = aes(x = district))
+ggplot(data = train.dockets) +
+  geom_histogram(mapping = aes(x = days_opened))
+ggplot(data = train.dockets) +
+  geom_histogram(mapping = aes(x = requested_damages_amt))
+```
+
+Logistic Regression (binomial)
+```{r}
+glm.fit <- glm(y~as.factor(nos_code)+district+issue_joined+days_opened+requested_damages_amt, data=train.dockets, family = binomial)
+summary(glm.fit)
+```
+
+Linear Discriminant Analysis (simple)
+```{r}
+lda.fit <- lda(y~as.factor(nos_code)+district+issue_joined+days_opened+requested_damages_amt, data=train.dockets, subset = (year_filed < 2018))
+lda.fit
+plot(lda.fit)
+```
+
+Making predictions
+```{r}
+y.test <- deframe(train.dockets %>%
+     filter(year_filed >= 2018) %>%
+     dplyr::select(y))
+
+lda.pred <- predict(lda.fit, train.dockets %>%
+                      filter(year_filed >= 2018) %>%
+                      dplyr::select(-y))
+lda.class <- lda.pred$class
+table(lda.class, y.test)
+mean(lda.class==y.test)
+```
+The model has about a 56% accuracy, but this is an example of how linear discriminant analysis can be conducted to make predictions.
+
+What abouta quadratic discriminant analysis?
+```{r}
+qda.fit <- qda(y~as.factor(nos_code)+district+issue_joined+days_opened+requested_damages_amt, data=train.dockets, subset = (year_filed < 2018))
+qda.fit
+qda.class <- predict(qda.fit, train.dockets %>%
+                      filter(year_filed >= 2018) %>%
+                      dplyr::select(-y))$class
+table(qda.class, y.test)
+mean(qda.class==y.test)
+```
+The quadratic model is less accurate! So we might be better off looking at some sort of linear classification model.
+
+Lastly, what about K-Nearest Neighbors?
+
+```{r}
+attach(train.dockets)
+train <- (year_filed < 2018)
+train.X <- cbind(as.factor(nos_code),district,issue_joined,days_opened,requested_damages_amt)[train,]
+test.X <- cbind(as.factor(nos_code),district,issue_joined,days_opened,requested_damages_amt)[!train,]
+train.y <- y[train]
+```
+
+running model with k = 1
+```{r}
+set.seed(1)
+knn.pred <- knn(train.X, test.X, train.y, k=1)
+table(knn.pred, y.test)
+(336+57+438)/1751
+```
+47% accuracy
+
+k=3
+```{r}
+set.seed(1)
+knn.pred <- knn(train.X, test.X, train.y, k=3)
+table(knn.pred, y.test)
+(348+41+455)/1751
+```
+48% accuracy
+
+Cross Validation (still working on this)
+
+# Notes Medvedeva, Vols, Wieling
+
+The authors find that analyzing legal texts for court proceedings will predict future decisions with 75% accuracy. We are not analyzing the text itself or using natural language processing but instead we can understand the different characteristics of each case and build a factor model from there.
+
+They also found that predicting outcomes based only on the judges surname yiels 65% accuracy, which we can show by running models that are based on location predictors that imply a difference in the judge assigned to each case.
+
+# General Notes
+We are creating a model that predicts a category (verdict) associated to each element (case). This is a supervised machine learning approach. The computer identifies patterns that are associated with each outcome.
+
+Westlaw, which is a product of Thomson Reuters has been compiling legal data for decade. The tools we can use in our analysis compine older legal methods of classification (deciding which predictors matter) and empirical quantitative tools (machine learning).
