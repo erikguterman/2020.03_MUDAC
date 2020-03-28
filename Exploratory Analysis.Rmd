@@ -126,7 +126,14 @@ summary(glm(settled ~ days_opened, data = train_dockets, family = binomial()))
 
 ```
 
-
+```{r}
+train_dockets <-
+  train_terminating_motions %>%
+  group_by(mudac_id) %>%
+  summarise(nmotionsfiled = n()) %>%
+  right_join(train_dockets, by =  "mudac_id") %>%
+  mutate(nmotionsfiled = replace_na(nmotionsfiled, 0))
+```
 
 
 
