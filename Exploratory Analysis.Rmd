@@ -8,17 +8,19 @@ output: pdf_document
 ```{r}
 library(tidyverse)
 library(readr)
+library(car)
 ```
 
 
 Consider separate models for Motion for Summary Judgement and Motion to Dismiss
 
-Reading in the data. All columns not specified use ReadR's default. 
-
-Many values specified as characters will be later converted to factors, if needed. (Additionally, the MUDAC_ID column is left as a CHAR across all datasets for simpler joining.)
+#Reading in the data. All columns not specified use ReadR's default. 
 
 
 ```{r}
+##Many values specified as characters will be later converted to factors, if needed. 
+##Additionally, the MUDAC_ID column is left as a CHAR across all datasets for simpler joining.
+
 train_dockets <- read_csv(
   "train_dockets.csv",
   col_types = cols(
@@ -56,9 +58,81 @@ districts <-
   
 ```
 
+#Merging Datasets
+
 ```{r}
+##The dataset we're working with is small enough that we'll be fine merging these together
+
+merged_district_with_fips <-
+  left_join(district_fips_code, districts, by = c("district_number", "state")) %>% 
+  rename(census_2010_district_population = census_2010_population)
+
+##Also, going to merge this information into the main one just to make it easier for humans to read.  
+train_dockets <- left_join(train_dockets, districts, by = c("district" = "district_number"))
+```
+
+#Cleaning and transforming data
+
+```{r}
+##There are very few cases with any pro se clients, and therefore all will be combined into one in order to improve the availability
+train_dockets <- train_dockets %>% 
+  mutate(pro_se = ifelse(pro_se == 0, 0, 1))
+```
+
+##Exploratory Analysis
+
+```{r}
+ggplot(train_dockets, aes(x = year_filed)) + 
+  geom_histogram(bins = 15, colour="black", fill="indianred4")
+
+ggplot(train_dockets,
+       aes(x = year_filed,
+       fill = outcome)) +
+       geom_bar(position = "fill") 
+
+##it might be worth considering a filter for 2020 if we include a year factor in the final model due to the very low number of cases for 2020
+##a difference visible in the distribution of outcomes
+
+ggplot(train_dockets, 
+       aes(x = district, fill = circuit)) + 
+  geom_bar(position = "stack")
+
+summary(glm(summary_judgment ~ circuit, data = train_dockets, family = binomial()))
+summary(glm(settled ~ circuit, data = train_dockets, family = binomial()))
+
+##In short, circuit does matter when computing the outcome. 
+
+ggplot(train_dockets, 
+       aes(x = nos_code, fill = circuit)) + 
+  geom_bar(position = "dodge")
+
+##The huge spike is the Illinois Northern district, which services the city of Chicago 
+##Similarly, the second highest is the Eastern Michigan district, representing Detroit, and so on for other large cities
+
+##Ask Barbara what to do with this extreme imbalance
+##Anova(lm(train_dockets$nos_code ~ train_dockets$circuit), type = 2)
+
+summary(glm(summary_judgment ~ requested_damages_amt, data = train_dockets, family = binomial()))
+summary(glm(settled ~ requested_damages_amt, data = train_dockets, family = binomial()))
+##Requested damages isn't a significant predictor of a summary judgement, but increasing it does lead to an increased likelihood of settling.
+
+summary(glm(summary_judgment ~ pro_se, data = train_dockets, family = binomial()))
+summary(glm(settled ~ pro_se, data = train_dockets, family = binomial()))
+##Filing pro se is a significant predictor of likelihood of both. 
+
+summary(glm(summary_judgment ~ days_opened, data = train_dockets, family = binomial()))
+summary(glm(settled ~ days_opened, data = train_dockets, family = binomial()))
+##The data may be unbalanced due to the fact that length of trial has a significant effect on outcome, and cases that will last longer that started recently will not have finished yet.  
 
 ```
+
+
+
+
+
+
+
+
 
 
 
