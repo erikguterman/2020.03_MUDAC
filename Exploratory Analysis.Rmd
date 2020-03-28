@@ -45,7 +45,7 @@ train_dockets <- read_csv(
 train_other_motions <-
   read_csv("train_other_motions.csv",
   col_types = cols(mudac_id = col_character()))
-  
+
 train_terminating_motions <-
   read_csv("train_terminating_motions.csv",
   col_types = cols(mudac_id = col_character()))
@@ -89,10 +89,19 @@ summary(glm(summary_judgment~motion_type+ filing_party+filed_before_joined+decis
 train_dockets <- train_dockets %>% 
   mutate(pro_se = ifelse(pro_se == 0, 0, 1))
 
+train_other_motions$decison <- as_factor(train_other_motions$decison)
+
 train_other_motions$terminating <- FALSE
 train_terminating_motions$terminating <- TRUE
 
 train_all_motions <- bind_rows(train_other_motions, train_terminating_motions)
+
+unavailableDistricts <- train_other_motions %>% 
+  left_join(select(train_dockets, c(
+  "mudac_id", "circuit", "district", "office"
+  )), by = "mudac_id") %>% filter(is.na(circuit)) %>% 
+  select("mudac_id")
+
 ```
 
 
@@ -163,4 +172,54 @@ summary(glm(settled ~ nmotionsfiled, data = train_dockets, family = binomial()))
 
 summary(glm(settled ~ nmotionsfiled + days_opened, data = train_dockets, family = binomial()))
 summary(glm(settled ~ nmotionsfiled + days_opened, data = train_dockets, family = binomial()))
+```
+
+```{r}
+train_other_motions %>% filter(!is.na(decison)) %>% 
+  left_join(select(train_dockets, c("mudac_id", "circuit", "district", "office")), by = "mudac_id") %>% 
+  ggplot(aes(x = circuit, fill = decison)) + 
+    geom_bar(position = "fill")
+
+rateAcceptDenyMotionByCourt <- train_other_motions %>% filter(!is.na(decison)) %>%
+  left_join(select(train_dockets, c("mudac_id", "district", "office")), by = "mudac_id") %>%
+  filter(filing_party != "Unknown" & filing_party != "Other") %>%
+  group_by(district, filing_party) %>%
+  summarise(
+  Count = n(),
+  rateGrant = mean(str_detect(decison, "Grant")),
+  rateDeny = mean(str_detect(decison, "Denied")),
+  rateOther = 1 - (rateGrant + rateDeny)
+  )
+
+par(mfrow = c(1, 2))
+
+train_other_motions %>% filter(!is.na(decison)) %>%
+  left_join(select(train_dockets, c(
+  "mudac_id", "circuit", "district", "office"
+  )), by = "mudac_id") %>%
+    filter(filing_party == "Defendant") %>% 
+  mutate(decison = fct_collapse(
+  decison,
+  Grant = c("Granted", "Granted in Part"),
+  Deny = c("Denied", "Denied as Moot")
+  )) %>%
+  ggplot(aes(x = circuit, fill = decison)) +
+  geom_bar(position = "fill")
+
+train_other_motions %>% filter(!is.na(decison)) %>%
+  left_join(select(train_dockets, c(
+  "mudac_id", "circuit", "district", "office"
+  )), by = "mudac_id") %>%
+  filter(filing_party == "Plaintiff") %>% 
+  mutate(decison = fct_collapse(
+  decison,
+  Grant = c("Granted", "Granted in Part"),
+  Deny = c("Denied", "Denied as Moot")
+  )) %>%
+  ggplot(aes(x = circuit, fill = decison)) +
+  geom_bar(position = "fill")
+
+##Everyone is nicer to defendants, but especially the 7th circuit. 
+
+```
 
