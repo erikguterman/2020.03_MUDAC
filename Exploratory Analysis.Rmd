@@ -13,6 +13,9 @@ library(nnet)
 library(ggplot2)
 library(car)
 library(lmtest)
+library(xgboost)
+library(mltools)
+library(data.table)
 ```
 
 
@@ -191,8 +194,6 @@ rateAcceptDenyMotionByCourt <- train_other_motions %>% filter(!is.na(decison)) %
   rateOther = 1 - (rateGrant + rateDeny)
   )
 
-par(mfrow = c(1, 2))
-
 train_other_motions %>% filter(!is.na(decison)) %>%
   left_join(select(train_dockets, c(
   "mudac_id", "circuit", "district", "office"
@@ -221,5 +222,35 @@ train_other_motions %>% filter(!is.na(decison)) %>%
 
 ##Everyone is nicer to defendants, but especially the 7th circuit. 
 
+
+
 ```
 
+
+##Now, the fun XGBoost stuff
+
+```{r}
+temp <-
+  train_dockets %>% select(nmotionsfiled, district, requested_damages_amt, pro_se) %>%
+  mutate(district = as_factor(district)) %>%
+  as.data.table()
+
+temp2 <- one_hot(temp) %>% as.matrix() 
+label <- train_dockets %>% select(settled) %>% mutate(settled = ifelse(settled == TRUE, 1, 0)) %>% as.matrix()
+
+n <- 100
+data <- data.frame(x=runif(n), y=rnorm(n))
+ind <- sample(c(TRUE, FALSE), n, replace=TRUE, prob=c(0.5, 0.5))
+dataTrain <- temp2[ind, ]
+dataTest <- temp2[!ind, ]
+labelTrain <- label[ind,]
+labelTest <- label[!ind,]
+
+trainData <- xgb.DMatrix(dataTrain, label = labelTrain)
+testData <- xgb.DMatrix(dataTest, label = labelTest)
+watchlist <- list(train = trainData, eval = testData)
+bstSparse <- xgboost(data = trainData, max_depth = 6, eta = 0.3, nthread = 2, nrounds = 10, objective = "binary:logistic")
+pred <- predict(bstSparse, trainData)
+outcome <- ifelse(pred > 0.5, 1, 0)
+mean(outcome == labelTrain)
+```
