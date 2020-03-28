@@ -44,5 +44,23 @@ train_other_motions <-
 train_terminating_motions <-
   read_csv("train_terminating_motions.csv",
   col_types = cols(mudac_id = col_character()))
+
+district_fips_code <- read_csv(
+  "district_fips_code.csv",
+  col_types = cols(district_number = col_character(),
+  fips_code = col_character())
+  )
+  
+districts <-
+  read_csv("districts.csv", col_types = cols(district_number = col_character()))
   
 ```
+
+```{r}
+
+```
+
+
+
+
+
