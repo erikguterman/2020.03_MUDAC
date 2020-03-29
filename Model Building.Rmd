@@ -9,18 +9,24 @@ output: pdf_document
 
 ```{r}
 designMatrix <-
-  train_dockets %>% select(nmotionsfiled,
+  train_dockets %>% select(
+  nmotionsfiled,
   pro_se,
   rateSettle,
   rateSummJudg,
   issue_joined,
   rateDenied, 
-  pretrial_conf
+  participants, 
+  nos_code
   ) %>%
-  as.data.table() %>% one_hot() %>% as.matrix()
+  mutate(nos_code = as.factor(nos_code)) %>% 
+  as.data.table() %>% 
+  one_hot() %>% 
+  as.matrix()
   
   labelSettled <-
   train_dockets %>% select(settled) %>% mutate(settled = ifelse(settled == TRUE, 1, 0)) %>% as.matrix()
+  
   labelSummJudg <-
   train_dockets %>% select(summary_judgment) %>% mutate(summary_judgment = ifelse(summary_judgment == TRUE, 1, 0)) %>% as.matrix()
 
