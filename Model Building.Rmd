@@ -13,8 +13,7 @@ designMatrix <-
   pro_se,
   rateSettle,
   issue_joined,
-  motionsDenied,
-  motionsGranted) %>%
+  motionsDenied) %>%
   as.data.table() %>% one_hot() %>% as.matrix()
   
   labelSettled <-
@@ -26,7 +25,7 @@ designMatrix <-
   ind <- sample(c(TRUE, FALSE),
   n,
   replace = TRUE,
-  prob = c(0.5, 0.5))
+  prob = c(0.75, 0.25))
   dataTrainSettled <- designMatrix[ind,]
   dataTestSettled <- designMatrix[!ind,]
   labelTrainSettled <- labelSettled[ind, ]
@@ -39,8 +38,8 @@ designMatrix <-
   bstSettled <-
   xgboost(
   data = trainDataSettled,
-  nthread = 2,
   nrounds = 20,
+  max.depth = 5,
   objective = "binary:logistic"
   )
   predSettled <- predict(bstSettled, testDataSettled)
@@ -65,7 +64,7 @@ designMatrix <-
   ind <- sample(c(TRUE, FALSE),
   n,
   replace = TRUE,
-  prob = c(0.5, 0.5))
+  prob = c(0.75, 0.25))
   dataTrainSummJudg <- designMatrix[ind,]
   dataTestSummJudg <- designMatrix[!ind,]
   labelTrainSummJudg <- labelSummJudg[ind, ]
@@ -78,10 +77,8 @@ designMatrix <-
   bstSummJudg <-
   xgboost(
   data = trainDataSummJudg,
-  eta = 0.2,
   nthread = 2,
   nrounds = 20,
-  gamma =  5,
   objective = "binary:logistic"
   )
   predSummJudg <- predict(bstSummJudg, testDataSummJudg)
@@ -98,8 +95,7 @@ designMatrix <-
 ##Pointlessly elaborate way to do the combined confusion matrix. But hey, it works, and it's a hack-a-thon so it's not like we're getting points for having the most elegant code. 
 
 ```{r}
-mean(rowSums(
-  cbind(
+mean(rowSums(cbind(
   ifelse(
   predOutcomeSettled == labelTestSettled &
   predOutcomeSettled == 1,
@@ -123,7 +119,8 @@ mean(rowSums(
   predOutcomeSummJudg == 1,
   1,
   0
-  ))))
+  )
+  )))
 ```
 
 
