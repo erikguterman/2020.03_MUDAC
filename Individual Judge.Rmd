@@ -31,11 +31,15 @@ nMotionsGranted <- train_other_motions %>%
   group_by(mudac_id) %>% 
   mutate(decison = tidyr::replace_na(decison, "Other")) %>% 
   mutate(motionsDenied = cumsum(decison == "Denied"),
-  motionsGranted = cumsum(str_detect(decison, "Granted"))) %>% 
+  motionsGranted = cumsum(str_detect(decison, "Granted"))
+  ) %>% 
   summarise(motionsDenied = max(motionsDenied), 
-            motionsGranted = max(motionsGranted))
+            motionsGranted = max(motionsGranted),  
+            nMotions = n())
 
-train_dockets <- train_dockets %>% left_join(nMotionsGranted, by = "mudac_id")
+train_dockets <- train_dockets %>% left_join(nMotionsGranted, by = "mudac_id") %>% 
+  mutate(rateDenied = motionsDenied / nMotions,
+         rateGranted = motionsGranted / nMotions)
 ```
 
 

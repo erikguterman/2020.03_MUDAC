@@ -5,7 +5,7 @@ date: "3/28/2020"
 output: pdf_document
 ---
 
-##Now, the fun XGBoost stuff
+##Design Matrix and splitting the Data
 
 ```{r}
 designMatrix <-
@@ -13,25 +13,38 @@ designMatrix <-
   pro_se,
   rateSettle,
   issue_joined,
-  motionsDenied,
-  motionsGranted) %>%
+  rateDenied) %>%
   as.data.table() %>% one_hot() %>% as.matrix()
   
   labelSettled <-
   train_dockets %>% select(settled) %>% mutate(settled = ifelse(settled == TRUE, 1, 0)) %>% as.matrix()
+  labelSummJudg <-
+  train_dockets %>% select(summary_judgment) %>% mutate(summary_judgment = ifelse(summary_judgment == TRUE, 1, 0)) %>% as.matrix()
+
   
-  set.seed(2020)
   n <- 100
   data <- data.frame(x = runif(n), y = rnorm(n))
   ind <- sample(c(TRUE, FALSE),
   n,
   replace = TRUE,
-  prob = c(0.5, 0.5))
+  prob = c(0.75, 0.25))
   dataTrainSettled <- designMatrix[ind,]
   dataTestSettled <- designMatrix[!ind,]
+  
   labelTrainSettled <- labelSettled[ind, ]
   labelTestSettled <- labelSettled[!ind, ]
   
+  dataTrainSummJudg <- designMatrix[ind,]
+  dataTestSummJudg <- designMatrix[!ind,]
+  
+  labelTrainSummJudg <- labelSummJudg[ind, ]
+  labelTestSummJudg <- labelSummJudg[!ind, ]
+```
+
+
+##Now, the fun XGBoost stuff
+
+```{r}
   trainDataSettled <-
   xgb.DMatrix(dataTrainSettled, label = labelTrainSettled)
   testDataSettled <-
@@ -39,7 +52,6 @@ designMatrix <-
   bstSettled <-
   xgboost(
   data = trainDataSettled,
-  nthread = 2,
   nrounds = 20,
   objective = "binary:logistic"
   )
@@ -52,25 +64,9 @@ designMatrix <-
   importance_matrix <- xgb.importance(model = bstSettled)
   print(importance_matrix)
   xgb.plot.importance(importance_matrix = importance_matrix)
-  
 ```
 
 ```{r}
-  labelSummJudg <-
-  train_dockets %>% select(summary_judgment) %>% mutate(summary_judgment = ifelse(summary_judgment == TRUE, 1, 0)) %>% as.matrix()
-  
-  set.seed(2020)
-  n <- 100
-  data <- data.frame(x = runif(n), y = rnorm(n))
-  ind <- sample(c(TRUE, FALSE),
-  n,
-  replace = TRUE,
-  prob = c(0.5, 0.5))
-  dataTrainSummJudg <- designMatrix[ind,]
-  dataTestSummJudg <- designMatrix[!ind,]
-  labelTrainSummJudg <- labelSummJudg[ind, ]
-  labelTestSummJudg <- labelSummJudg[!ind, ]
-  
   trainDataSummJudg <-
   xgb.DMatrix(dataTrainSummJudg, label = labelTrainSummJudg)
   testDataSummJudg <-
@@ -78,10 +74,7 @@ designMatrix <-
   bstSummJudg <-
   xgboost(
   data = trainDataSummJudg,
-  eta = 0.2,
-  nthread = 2,
   nrounds = 20,
-  gamma =  5,
   objective = "binary:logistic"
   )
   predSummJudg <- predict(bstSummJudg, testDataSummJudg)
@@ -98,8 +91,7 @@ designMatrix <-
 ##Pointlessly elaborate way to do the combined confusion matrix. But hey, it works, and it's a hack-a-thon so it's not like we're getting points for having the most elegant code. 
 
 ```{r}
-mean(rowSums(
-  cbind(
+mean(rowSums(cbind(
   ifelse(
   predOutcomeSettled == labelTestSettled &
   predOutcomeSettled == 1,
@@ -123,7 +115,8 @@ mean(rowSums(
   predOutcomeSummJudg == 1,
   1,
   0
-  ))))
+  )
+  )))
 ```
 
 
