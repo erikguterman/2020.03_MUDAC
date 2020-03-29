@@ -9,61 +9,124 @@ output: pdf_document
 
 ```{r}
 designMatrix <-
-  train_dockets %>% select(nmotionsfiled, pro_se, rateSettle, issue_joined, motionsDenied, motionsGranted) %>%
-  # mutate(
-  #   nos_code = as_factor(nos_code)) %>%
-  as.data.table() %>% one_hot() %>% as.matrix() 
-
-labelSettled <- train_dockets %>% select(settled) %>% mutate(settled = ifelse(settled == TRUE, 1, 0)) %>% as.matrix()
-
-set.seed(2020)
-n <- 100
-data <- data.frame(x=runif(n), y=rnorm(n))
-ind <- sample(c(TRUE, FALSE), n, replace=TRUE, prob=c(0.5, 0.5))
-dataTrainSettled <- designMatrix[ind, ]
-dataTestSettled <- designMatrix[!ind, ]
-labelTrainSettled <- labelSettled[ind,]
-labelTestSettled <- labelSettled[!ind,]
-
-trainDataSettled <- xgb.DMatrix(dataTrainSettled, label = labelTrainSettled)
-testDataSettled <- xgb.DMatrix(dataTestSettled, label = labelTestSettled)
-bstSettled <- xgboost(data = trainDataSettled, eta = 0.2, nthread = 2, nrounds = 20, objective = "binary:logistic")
-predSettled <- predict(bstSettled, trainDataSettled)
-outcomeSettled <- ifelse(predSettled > 0.5, 1, 0)
-mean(outcomeSettled == labelTrainSettled)
-
-importance_matrix <- xgb.importance(model = bstSettled)
-print(importance_matrix)
-xgb.plot.importance(importance_matrix = importance_matrix)
-
-labelSummJudg <- train_dockets %>% select(summary_judgment) %>% mutate(summary_judgment = ifelse(summary_judgment == TRUE, 1, 0)) %>% as.matrix()
-
-set.seed(2020)
-n <- 100
-data <- data.frame(x=runif(n), y=rnorm(n))
-ind <- sample(c(TRUE, FALSE), n, replace=TRUE, prob=c(0.5, 0.5))
-dataTrainSummJudg <- designMatrix[ind, ]
-dataTestSummJudg <- designMatrix[!ind, ]
-labelTrainSummJudg <- labelSummJudg[ind,]
-labelTestSummJudg <- labelSummJudg[!ind,]
-
-trainDataSummJudg <- xgb.DMatrix(dataTrainSummJudg, label = labelTrainSummJudg)
-testDataSummJudg <- xgb.DMatrix(dataTestSummJudg, label = labelTestSummJudg)
-bstSummJudg <- xgboost(data = trainDataSummJudg, eta = 0.2, nthread = 2, nrounds = 20, objective = "binary:logistic")
-predSummJudg <- predict(bstSummJudg, trainDataSummJudg)
-outcomeSummJudg <- ifelse(predSummJudg > 0.5, 1, 0)
-mean(outcomeSummJudg == labelTrainSummJudg)
-
-importance_matrix <- xgb.importance(model = bstSummJudg)
-print(importance_matrix)
-xgb.plot.importance(importance_matrix = importance_matrix)
-
+  train_dockets %>% select(nmotionsfiled,
+  pro_se,
+  rateSettle,
+  issue_joined,
+  motionsDenied,
+  motionsGranted) %>%
+  as.data.table() %>% one_hot() %>% as.matrix()
+  
+  labelSettled <-
+  train_dockets %>% select(settled) %>% mutate(settled = ifelse(settled == TRUE, 1, 0)) %>% as.matrix()
+  
+  set.seed(2020)
+  n <- 100
+  data <- data.frame(x = runif(n), y = rnorm(n))
+  ind <- sample(c(TRUE, FALSE),
+  n,
+  replace = TRUE,
+  prob = c(0.5, 0.5))
+  dataTrainSettled <- designMatrix[ind,]
+  dataTestSettled <- designMatrix[!ind,]
+  labelTrainSettled <- labelSettled[ind, ]
+  labelTestSettled <- labelSettled[!ind, ]
+  
+  trainDataSettled <-
+  xgb.DMatrix(dataTrainSettled, label = labelTrainSettled)
+  testDataSettled <-
+  xgb.DMatrix(dataTestSettled, label = labelTestSettled)
+  bstSettled <-
+  xgboost(
+  data = trainDataSettled,
+  nthread = 2,
+  nrounds = 20,
+  objective = "binary:logistic"
+  )
+  predSettled <- predict(bstSettled, testDataSettled)
+  predOutcomeSettled <- ifelse(predSettled > 0.5, 1, 0)
 ```
 
 ```{r}
-
-
-
+  confusionMatrix(as.factor(predOutcomeSettled), as.factor(labelTestSettled))
+  importance_matrix <- xgb.importance(model = bstSettled)
+  print(importance_matrix)
+  xgb.plot.importance(importance_matrix = importance_matrix)
+  
 ```
+
+```{r}
+  labelSummJudg <-
+  train_dockets %>% select(summary_judgment) %>% mutate(summary_judgment = ifelse(summary_judgment == TRUE, 1, 0)) %>% as.matrix()
+  
+  set.seed(2020)
+  n <- 100
+  data <- data.frame(x = runif(n), y = rnorm(n))
+  ind <- sample(c(TRUE, FALSE),
+  n,
+  replace = TRUE,
+  prob = c(0.5, 0.5))
+  dataTrainSummJudg <- designMatrix[ind,]
+  dataTestSummJudg <- designMatrix[!ind,]
+  labelTrainSummJudg <- labelSummJudg[ind, ]
+  labelTestSummJudg <- labelSummJudg[!ind, ]
+  
+  trainDataSummJudg <-
+  xgb.DMatrix(dataTrainSummJudg, label = labelTrainSummJudg)
+  testDataSummJudg <-
+  xgb.DMatrix(dataTestSummJudg, label = labelTestSummJudg)
+  bstSummJudg <-
+  xgboost(
+  data = trainDataSummJudg,
+  eta = 0.2,
+  nthread = 2,
+  nrounds = 20,
+  gamma =  5,
+  objective = "binary:logistic"
+  )
+  predSummJudg <- predict(bstSummJudg, testDataSummJudg)
+  predOutcomeSummJudg <- as.factor(ifelse(predSummJudg > 0.5, 1, 0))
+```
+
+```{r}
+  confusionMatrix(as.factor(predOutcomeSummJudg), as.factor(labelTestSummJudg))
+  importance_matrix <- xgb.importance(model = bstSummJudg)
+  print(importance_matrix)
+  xgb.plot.importance(importance_matrix = importance_matrix)
+```
+
+##Pointlessly elaborate way to do the combined confusion matrix. But hey, it works, and it's a hack-a-thon so it's not like we're getting points for having the most elegant code. 
+
+```{r}
+mean(rowSums(
+  cbind(
+  ifelse(
+  predOutcomeSettled == labelTestSettled &
+  predOutcomeSettled == 1,
+  1,
+  0
+  ),
+  ifelse(
+  predOutcomeSettled == labelTestSettled &
+  predOutcomeSettled == 0,
+  1,
+  0
+  ),
+  ifelse(
+  predOutcomeSummJudg == labelTestSummJudg &
+  predOutcomeSummJudg == 1,
+  1,
+  0
+  ),
+  ifelse(
+  predOutcomeSummJudg == labelTestSummJudg &
+  predOutcomeSummJudg == 1,
+  1,
+  0
+  ))))
+```
+
+
+
 
 
