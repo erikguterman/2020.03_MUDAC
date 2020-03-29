@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(MASS)
 library(class)
+library(boot)
 ```
 # Exploratory Analysis 
 Importing the data:
@@ -109,7 +110,16 @@ table(knn.pred, y.test)
 ```
 48% accuracy
 
-Cross Validation (still working on this)
+Cross Validation (k=10)
+```{r}
+set.seed(1)
+cv.error.10=rep(0,10)
+for(i in 1:10){
+  glm.fit <- glm(y~poly(nos_code+district+issue_joined+requested_damages_amt,i), data=train.dockets, family = binomial)
+  cv.error.10[i] <- cv.glm(train.dockets, glm.fit, K=10)$delta[1]
+}
+cv.error.10
+```
 
 # Notes Medvedeva, Vols, Wieling
 
