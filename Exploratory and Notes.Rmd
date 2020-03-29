@@ -110,6 +110,33 @@ table(knn.pred, y.test)
 ```
 48% accuracy
 
+k=5
+```{r}
+set.seed(1)
+knn.pred <- knn(train.X, test.X, train.y, k=5)
+table(knn.pred, y.test)
+(358+40+450)/1751
+```
+48%
+
+k=7
+```{r}
+set.seed(1)
+knn.pred <- knn(train.X, test.X, train.y, k=7)
+table(knn.pred, y.test)
+(347+32+466)/1751
+```
+48%
+
+k=10
+```{r}
+set.seed(1)
+knn.pred <- knn(train.X, test.X, train.y, k=10)
+table(knn.pred, y.test)
+(350+28+496)/1751
+```
+49%
+
 Cross Validation (k=10)
 ```{r}
 set.seed(1)
