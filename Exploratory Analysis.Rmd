@@ -58,7 +58,8 @@ train_dockets <- train_dockets %>%
   ##There are very few cases with any pro se clients, and therefore all will be combined into one in order to improve the availability
   mutate(pro_se = ifelse(pro_se == 0, 0, 1),
          #Creating specific factor for each venue, i.e. district + office
-         venue = as.factor(paste(district,".",office, sep = ""))
+         venue = as.factor(paste(district,".",office, sep = "")), 
+         countParticipants = sum(plaintiffs, defendants, attorneys_listed, judges_assigned)
          )
 
 train_other_motions$decison <- as_factor(train_other_motions$decison)

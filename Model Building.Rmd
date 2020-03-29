@@ -12,8 +12,11 @@ designMatrix <-
   train_dockets %>% select(nmotionsfiled,
   pro_se,
   rateSettle,
+  rateSummJudg,
   issue_joined,
-  rateDenied) %>%
+  rateDenied, 
+  pretrial_conf
+  ) %>%
   as.data.table() %>% one_hot() %>% as.matrix()
   
   labelSettled <-
@@ -45,15 +48,17 @@ designMatrix <-
 ##Now, the fun XGBoost stuff
 
 ```{r}
-  trainDataSettled <-
+trainDataSettled <-
   xgb.DMatrix(dataTrainSettled, label = labelTrainSettled)
   testDataSettled <-
   xgb.DMatrix(dataTestSettled, label = labelTestSettled)
   bstSettled <-
   xgboost(
   data = trainDataSettled,
-  nrounds = 20,
-  objective = "binary:logistic"
+  nround = 20,
+  early_stopping_rounds = 3,
+  objective = "binary:logistic", 
+  gamma = 1
   )
   predSettled <- predict(bstSettled, testDataSettled)
   predOutcomeSettled <- ifelse(predSettled > 0.5, 1, 0)
@@ -67,15 +72,17 @@ designMatrix <-
 ```
 
 ```{r}
-  trainDataSummJudg <-
+trainDataSummJudg <-
   xgb.DMatrix(dataTrainSummJudg, label = labelTrainSummJudg)
   testDataSummJudg <-
   xgb.DMatrix(dataTestSummJudg, label = labelTestSummJudg)
   bstSummJudg <-
   xgboost(
   data = trainDataSummJudg,
-  nrounds = 20,
-  objective = "binary:logistic"
+  objective = "binary:logistic",
+  nround = 20,
+  early_stopping_rounds = 3, 
+  gamma = 1
   )
   predSummJudg <- predict(bstSummJudg, testDataSummJudg)
   predOutcomeSummJudg <- as.factor(ifelse(predSummJudg > 0.5, 1, 0))
@@ -119,6 +126,10 @@ mean(rowSums(cbind(
   )))
 ```
 
+```{r}
+xgb.plot.multi.trees(feature_names = names(diseaseInfo_matrix), 
+                     model = model)
+```
 
 
 
