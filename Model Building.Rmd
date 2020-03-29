@@ -7,6 +7,8 @@ output: pdf_document
 
 ##Design Matrix and splitting the Data
 
+##Kitchen Sink model
+
 ```{r}
 designMatrix <-
   train_dockets %>% select(
@@ -16,10 +18,68 @@ designMatrix <-
   rateSummJudg,
   issue_joined,
   rateDenied, 
-  participants, 
-  nos_code
+  census_2010_population, 
+  nos_code,
+  jury_demand, 
+  jurisdiction,
+  informa_pauperis, 
+  class_action, 
+  pretrial_conf, 
+  total_entry_count, 
+  circuit
   ) %>%
-  mutate(nos_code = as.factor(nos_code)) %>% 
+  mutate(
+    circuit = as.factor(circuit),
+    nos_code  = as.factor(nos_code),
+    jurisdiction = as.factor(jurisdiction),
+    informa_pauperis = as.factor(informa_pauperis)
+  ) %>%  
+  as.data.table() %>% 
+  one_hot() %>%
+  as.matrix()
+
+
+
+  
+  labelSettled <-
+  train_dockets %>% select(settled) %>% mutate(settled = ifelse(settled == TRUE, 1, 0)) %>% as.matrix()
+  
+  labelSummJudg <-
+  train_dockets %>% select(summary_judgment) %>% mutate(summary_judgment = ifelse(summary_judgment == TRUE, 1, 0)) %>% as.matrix()
+
+  
+  n <- 100
+  data <- data.frame(x = runif(n), y = rnorm(n))
+  ind <- sample(c(TRUE, FALSE),
+  n,
+  replace = TRUE,
+  prob = c(0.75, 0.25))
+  dataTrainSettled <- designMatrix[ind,]
+  dataTestSettled <- designMatrix[!ind,]
+  
+  labelTrainSettled <- labelSettled[ind, ]
+  labelTestSettled <- labelSettled[!ind, ]
+  
+  dataTrainSummJudg <- designMatrix[ind,]
+  dataTestSummJudg <- designMatrix[!ind,]
+  
+  labelTrainSummJudg <- labelSummJudg[ind, ]
+  labelTestSummJudg <- labelSummJudg[!ind, ]
+```
+
+
+```{r}
+designMatrix <-
+  train_dockets %>% select(
+  nmotionsfiled,
+  pro_se,
+  rateSettle,
+  rateSummJudg,
+  issue_joined,
+  rateDenied, 
+  census_2010_population, 
+  total_entry_count
+  ) %>%
   as.data.table() %>% 
   one_hot() %>% 
   as.matrix()
@@ -64,7 +124,7 @@ trainDataSettled <-
   nround = 20,
   early_stopping_rounds = 3,
   objective = "binary:logistic", 
-  gamma = 1
+  gamma = 10
   )
   predSettled <- predict(bstSettled, testDataSettled)
   predOutcomeSettled <- ifelse(predSettled > 0.5, 1, 0)
@@ -87,8 +147,8 @@ trainDataSummJudg <-
   data = trainDataSummJudg,
   objective = "binary:logistic",
   nround = 20,
-  early_stopping_rounds = 3, 
-  gamma = 1
+  early_stopping_rounds = 3,
+  gamma = 10
   )
   predSummJudg <- predict(bstSummJudg, testDataSummJudg)
   predOutcomeSummJudg <- as.factor(ifelse(predSummJudg > 0.5, 1, 0))
@@ -104,7 +164,9 @@ trainDataSummJudg <-
 ##Pointlessly elaborate way to do the combined confusion matrix. But hey, it works, and it's a hack-a-thon so it's not like we're getting points for having the most elegant code. 
 
 ```{r}
-mean(rowSums(cbind(
+mean(
+  
+  qqq <- rowSums(cbind(
   ifelse(
   predOutcomeSettled == labelTestSettled &
   predOutcomeSettled == 1,
@@ -129,14 +191,88 @@ mean(rowSums(cbind(
   1,
   0
   )
-  )))
+  ))
+  
+  
+  
+  )
 ```
 
 ```{r}
-xgb.plot.multi.trees(feature_names = names(diseaseInfo_matrix), 
-                     model = model)
+xgb.plot.multi.trees(feature_names = names(designMatrix), 
+                     model = bstSettled)
 ```
 
 
+```{r}
+  testDesignMatrix <-
+  test_dockets %>% select(
+  nmotionsfiled,
+  pro_se,
+  rateSettle,
+  rateSummJudg,
+  issue_joined,
+  rateDenied, 
+  census_2010_population, 
+  total_entry_count
+  ) %>%
+  as.data.table() %>% 
+  one_hot() %>% 
+  as.matrix()
+  
+  testSettlementPredictions <- predict(bstSettled, testDesignMatrix)
+  testSummJudgPredictions <- predict(bstSummJudg, testDesignMatrix)
+
+  testIDs <- test_dockets$mudac_id
+  testSummJudgPredictions  <- paste(testIDs, "SummaryJudgment", sep = "-") %>% cbind(testSummJudgPredictions)
+  testSettlementPredictions  <- paste(testIDs, "Settled", sep = "-") %>% cbind(testSettlementPredictions)
+  
+  umn.edu_Team_27 <- rbind(testSettlementPredictions, testSummJudgPredictions)
+  colnames(umn.edu_Team_27) <- c("id", "probability") 
+  
+  write_csv(as_tibble(umn.edu_Team_27),  path = "umn.edu_Team_27.csv")
+```
+
+```{r}
+testDesignMatrix <-
+  test_dockets %>% select(
+  nmotionsfiled,
+  pro_se,
+  rateSettle,
+  rateSummJudg,
+  issue_joined,
+  rateDenied, 
+  census_2010_population, 
+  nos_code,
+  jury_demand, 
+  jurisdiction,
+  informa_pauperis, 
+  class_action, 
+  pretrial_conf, 
+  total_entry_count, 
+  circuit
+  ) %>%
+  mutate(
+    circuit = as.factor(circuit),
+    nos_code  = as.factor(nos_code),
+    jurisdiction = as.factor(jurisdiction),
+    informa_pauperis = as.factor(informa_pauperis)
+  ) %>%  
+  as.data.table() %>% 
+  one_hot() %>% 
+  as.matrix()
+
+  testSettlementPredictions <- predict(bstSettled, testDesignMatrix)
+  testSummJudgPredictions <- predict(bstSummJudg, testDesignMatrix)
+
+  testIDs <- test_dockets$mudac_id
+  testSummJudgPredictions  <- paste(testIDs, "SummaryJudgment", sep = "-") %>% cbind(testSummJudgPredictions)
+  testSettlementPredictions  <- paste(testIDs, "Settled", sep = "-") %>% cbind(testSettlementPredictions)
+  
+  umn.edu_Team_27 <- rbind(testSettlementPredictions, testSummJudgPredictions)
+  colnames(umn.edu_Team_27) <- c("id", "probability") 
+  
+  write_csv(as_tibble(umn.edu_Team_27),  path = "umn.edu_Team_27.csv")
+```
 
 

@@ -1,0 +1,220 @@
+---
+title: "Data Cleaning"
+author: "Erik Guterman"
+date: "3/29/2020"
+output: pdf_document
+---
+
+#Packages:
+
+```{r}
+library(tidyverse)
+library(readr)
+library(foreign)
+library(nnet)
+library(naniar)
+library(car)
+library(lmtest)
+library(xgboost)
+library(mltools)
+library(data.table)
+library(caret)
+```
+
+##Reading in and Cleaning the Data
+
+Many values specified as characters will be later converted to factors, if needed. (Additionally, the MUDAC_ID column is left as a CHAR across all datasets for simpler joining.)
+
+
+```{r}
+train_dockets <- read_csv(
+  "train_dockets.csv",
+  col_types = cols(
+  circuit = col_character(),
+  district = col_character(),
+  diversity_residence = col_character(),
+  filers_county = col_character(),
+  jurisdiction = col_character(),
+  mudac_id = col_character(),
+  nos_code = col_character(),
+  office = col_character(),
+  origin_at_filing = col_character(),
+  pro_se = col_character(),
+  settled = col_logical(),
+  summary_judgment = col_logical()
+  )
+  )
+
+train_other_motions <-
+  read_csv("train_other_motions.csv",
+  col_types = cols(mudac_id = col_character()))
+
+train_terminating_motions <-
+  read_csv("train_terminating_motions.csv",
+  col_types = cols(mudac_id = col_character()))
+
+districts <- read_csv("districts.csv",
+                      col_types = cols(district_number = col_character()))
+                      
+train_dockets <- train_dockets %>%
+  ##There are very few cases with any pro se clients, and therefore all will be combined into one in order to improve the availability
+  mutate(
+  pro_se = ifelse(pro_se == 0, 0, 1),
+  #Creating specific factor for each venue, i.e. district + office
+  venue = as.factor(paste(district, ".", office, sep = "")),
+  countParticipants = sum(plaintiffs, defendants, attorneys_listed, judges_assigned),
+  jury_demand = as.factor(jury_demand)
+  ) %>%
+  mutate(jury_demand  = fct_collapse(jury_demand,
+  yes = c("P", "D", "B"),
+  no =  "N")) %>% 
+  replace_with_na(replace = list(jury_demand = "-8"))
+
+train_other_motions <- left_join(train_other_motions, select(train_dockets, "mudac_id", "venue") , by = "mudac_id")
+
+train_other_motions$decison <- as_factor(train_other_motions$decison)
+
+train_other_motions$terminating <- FALSE
+train_terminating_motions$terminating <- TRUE
+
+train_all_motions <- bind_rows(train_other_motions, train_terminating_motions)
+
+train_dockets <- left_join(train_dockets, districts, by = c("district" = "district_number"))
+
+unavailableDistricts <- train_other_motions %>% 
+  left_join(select(train_dockets, c(
+  "mudac_id", "circuit", "district", "office"
+  )), by = "mudac_id") %>% filter(is.na(circuit)) %>% 
+  select("mudac_id")
+
+train_dockets <-
+  train_all_motions %>%
+  group_by(mudac_id) %>%
+  summarise(nmotionsfiled = n()) %>%
+  right_join(train_dockets, by =  "mudac_id") %>%
+  mutate(nmotionsfiled = replace_na(nmotionsfiled, 0))
+
+rateAcceptDenyMotionByCourt <- train_other_motions %>% filter(!is.na(decison)) %>%
+  left_join(select(train_dockets, c("mudac_id", "district", "office")), by = "mudac_id") %>%
+  filter(filing_party != "Unknown" & filing_party != "Other") %>%
+  group_by(district, filing_party) %>%
+  summarise(
+  Count = n(),
+  rateGrant = mean(str_detect(decison, "Grant")),
+  rateDeny = mean(str_detect(decison, "Denied")),
+  rateOther = 1 - (rateGrant + rateDeny)
+  )
+
+outcomeByVenue <- train_dockets %>% group_by(venue) %>%
+  summarise(
+  NCases = n(),
+  rateSettle = mean(outcome == "Settled"),
+  rateSummJudg = mean(outcome == "Summary Judgment"), 
+  rateOther = mean(outcome != "Summary Judgment" & outcome != "Settled")
+  )
+
+train_dockets <- train_dockets %>% left_join(outcomeByVenue, by = "venue")
+
+nMotionsGranted <- train_other_motions %>%
+  group_by(mudac_id) %>% 
+  mutate(decison = tidyr::replace_na(decison, "Other")) %>% 
+  mutate(motionsDenied = cumsum(decison == "Denied"),
+  motionsGranted = cumsum(str_detect(decison, "Granted"))
+  ) %>% 
+  summarise(motionsDenied = max(motionsDenied), 
+            motionsGranted = max(motionsGranted),  
+            nMotions = n())
+
+train_dockets <- train_dockets %>% left_join(nMotionsGranted, by = "mudac_id") %>% 
+  mutate(rateDenied = motionsDenied / nMotions,
+         rateGranted = motionsGranted / nMotions)
+```
+
+```{r}
+test_dockets <- read_csv(
+  "test_dockets.csv",
+  col_types = cols(
+  circuit = col_character(),
+  district = col_character(),
+  diversity_residence = col_character(),
+  filers_county = col_character(),
+  jurisdiction = col_character(),
+  mudac_id = col_character(),
+  nos_code = col_character(),
+  office = col_character(),
+  origin_at_filing = col_character(),
+  pro_se = col_character()
+  )
+  )
+
+test_other_motions <-
+  read_csv("test_other_motions.csv",
+  col_types = cols(mudac_id = col_character()))
+
+test_terminating_motions <-
+  read_csv("test_terminating_motions.csv",
+  col_types = cols(mudac_id = col_character()))
+
+districts <- read_csv("districts.csv",
+                      col_types = cols(district_number = col_character()))
+                      
+test_dockets <- test_dockets %>% 
+  mutate(
+  pro_se = ifelse(pro_se == 0, 0, 1),
+  #Creating specific factor for each venue, i.e. district + office
+  venue = as.factor(paste(district, ".", office, sep = "")),
+  countParticipants = sum(plaintiffs, defendants, attorneys_listed, judges_assigned),
+  jury_demand = as.factor(jury_demand)
+  ) %>%
+  mutate(jury_demand  = fct_collapse(jury_demand,
+  yes = c("P", "D", "B"),
+  no =  "N")) %>% 
+  replace_with_na(replace = list(jury_demand = "-8"))
+
+test_other_motions <- left_join(test_other_motions, select(test_dockets, "mudac_id", "venue") , by = "mudac_id")
+
+test_other_motions$decison <- as_factor(test_other_motions$decison)
+
+test_other_motions$terminating <- FALSE
+test_terminating_motions$terminating <- TRUE
+
+test_all_motions <- bind_rows(test_other_motions, test_terminating_motions)
+
+test_dockets <- left_join(test_dockets, districts, by = c("district" = "district_number"))
+
+test_dockets <-
+  test_all_motions %>%
+  group_by(mudac_id) %>%
+  summarise(nmotionsfiled = n()) %>%
+  right_join(test_dockets, by =  "mudac_id") %>%
+  mutate(nmotionsfiled = replace_na(nmotionsfiled, 0))
+
+rateAcceptDenyMotionByCourt <- test_other_motions %>% filter(!is.na(decison)) %>%
+  left_join(select(test_dockets, c("mudac_id", "district", "office")), by = "mudac_id") %>%
+  filter(filing_party != "Unknown" & filing_party != "Other") %>%
+  group_by(district, filing_party) %>%
+  summarise(
+  Count = n(),
+  rateGrant = mean(str_detect(decison, "Grant")),
+  rateDeny = mean(str_detect(decison, "Denied")),
+  rateOther = 1 - (rateGrant + rateDeny)
+  )
+
+test_dockets <- test_dockets %>% left_join(outcomeByVenue, by = "venue")
+
+nMotionsGranted <- test_other_motions %>%
+  group_by(mudac_id) %>% 
+  mutate(decison = tidyr::replace_na(decison, "Other")) %>% 
+  mutate(motionsDenied = cumsum(decison == "Denied"),
+  motionsGranted = cumsum(str_detect(decison, "Granted"))
+  ) %>% 
+  summarise(motionsDenied = max(motionsDenied), 
+            motionsGranted = max(motionsGranted),  
+            nMotions = n())
+
+test_dockets <- test_dockets %>% left_join(nMotionsGranted, by = "mudac_id") %>% 
+  mutate(rateDenied = motionsDenied / nMotions,
+         rateGranted = motionsGranted / nMotions)
+```
+
+
